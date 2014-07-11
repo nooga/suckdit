@@ -2,7 +2,7 @@
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [goog.dom :as dom]
             [goog.events :as events]
-            [cljs.core.async :refer [<! put! chan]])
+            [cljs.core.async :refer [<! put! chan timeout]])
   (:import [goog.net Jsonp]
            [goog Uri]))
 
@@ -67,24 +67,34 @@
     (dom/createDom "div" "post"
                    (dom/createDom "a" #js{:href (post "url") :style style :target "_blank"} (post "title")))))
 
-
-#_(def scroll (listen (dom/getDocument) "scroll"))
+(def scroll (let [out (chan)
+                  interval 3000]
+    (go (while true
+      (<! (timeout interval))
+      (let [height (dom/getDocumentHeight)
+            scroll (.-y (dom/getDocumentScroll))]
+        (>! out [height scroll]))))
+     out))
 
 (def last-post nil)
 (def posts-loaded 0)
 
 (let [ribbon (dom/getElement "ribbon")
-      clicks (listen (dom/getElement "moar") "click")]
+      clicks (listen (dom/getElement "moar") "click")
+      wheight (.-height  (dom/getViewportSize))]
   (go (while true
         (let [post (<! posts)]
           (set! last-post (post "name"))
           (set! posts-loaded (inc posts-loaded))
-          (println last-post)
           (dom/append ribbon (post->html post)))))
   (go (while true
         (<! clicks)
         (request-more last-post)))
-  #_(go (while true
-        (.log js/console  (<! scroll)))))
+  (go (while true
+        (let [[h s] (<! scroll)
+              k 2
+              load? (> s (- h (* wheight k)))]
+          #_(println wheight h s load?)
+          (when load? #_(println "load") (request-more last-post))))))
 
 (request-more nil)
