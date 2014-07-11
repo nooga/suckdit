@@ -6,7 +6,7 @@
   (:import [goog.net Jsonp]
            [goog Uri]))
 
-(enable-console-print!)
+(def SUBREDDIT "pics")
 
 (defn listen [el type]
   (let [out (chan)]
@@ -60,15 +60,15 @@
 (def posts (ch-map #(assoc % :image (post->image %)) (ch-flat-map split-posts reddit)))
 
 (defn request-more [after]
-  (jsonp (reddit-r "pics" :limit 24 :after after) :out reddit))
+  (jsonp (reddit-r SUBREDDIT :limit 24 :after after) :out reddit))
 
 (defn post->html [post]
   (let [style (str "background-image: url(" (post :image) ")")]
     (dom/createDom "div" "post"
-                   (dom/createDom "a" #js{:href (post "url") :style style :target "_blank"} (post "title")))))
+                   (dom/createDom "a" #js{:href (post "url") :style style :target "_blank"}
+                                  (post "title")))))
 
-(def scroll (let [out (chan)
-                  interval 3000]
+(def scroll (let [out (chan) interval 3000]
     (go (while true
       (<! (timeout interval))
       (let [height (dom/getDocumentHeight)
@@ -91,10 +91,8 @@
         (<! clicks)
         (request-more last-post)))
   (go (while true
-        (let [[h s] (<! scroll)
-              k 2
-              load? (> s (- h (* wheight k)))]
-          #_(println wheight h s load?)
-          (when load? #_(println "load") (request-more last-post))))))
+        (let [[h s] (<! scroll) k 2]
+          (when (> s (- h (* wheight k)))
+            (request-more last-post))))))
 
 (request-more nil)
